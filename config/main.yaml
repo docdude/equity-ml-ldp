@@ -1,0 +1,130 @@
+# Unified Configuration for Equity ML Trading System
+# Contains both ML training parameters and production settings
+
+# ============================================================================
+# MACHINE LEARNING CONFIGURATION
+# Optimized parameters from Bayesian optimization and parameter sweep
+# Model performance: AUC 0.6152, 25.9% CAGR, 12.58 Sharpe, -12.6% max DD
+# ============================================================================
+
+universe:
+  # Either list tickers explicitly or point to a CSV.
+  tickers: [AAPL, DELL, JOBY, LCID, SMCI, NVDA, TSLA, WDAY, AMZN, AVGO, SPY, ^VIX, ^TNX, GC=F, DX-Y.NYB, ^TYX, ^GSPC, ^FVX, JPY=X]
+  # or: tickers_csv: data_raw/sp500_2025.csv
+  benchmark: "SPY"      # <- set a benchmark ticker you already download
+
+prices:
+  start: '2015-01-01'
+  end: '2025-10-02'
+  interval: '1d'
+
+labeling:
+  horizon_days: 2          # time barrier (optimal from sweep)
+  take_profit: 0.02        # +2.0% TP (optimal from sweep: was 0.015)
+  stop_loss: 0.035         # -3.5% SL (optimal from sweep: was 0.045)
+  min_hold_days: 1         # ignore micro noise
+
+features:
+  add_cross_sectional: false
+  per_ticker_zscore: true
+  windows: [3, 5, 10, 20, 50]     # medium window set (optimized)
+  benchmark: "SPY"      # <- set a benchmark ticker you already download
+  market_feature_mode: "lag1"   # "raw" | "lag1" | "none" (optimized)
+  cross_sectional_stats: "both"   # "z" | "rank" | "both"
+
+model:
+  type: lightgbm           # 'logistic' | 'lightgbm'
+  lgbm_params:
+    objective: binary
+    boosting_type: gbdt
+    learning_rate: 0.01783017238452461     # optimized: was 0.0498
+    num_leaves: 36                         # optimized: was 87
+    min_data_in_leaf: 275                  # optimized: was 1050
+    max_depth: 9                           # optimized: was 10
+    feature_fraction: 0.7976750349872325   # optimized: was 0.6619
+    bagging_fraction: 0.8304369690116574   # optimized: was 0.8336
+    bagging_freq: 1
+    lambda_l1: 1.6493769457878675          # optimized: was 0.9841
+    lambda_l2: 1.5878478387141675          # optimized: was 4.9199
+    min_gain_to_split: 0.08819820878759455 # optimized: was 0.0992
+    min_sum_hessian_in_leaf: 9.218904864897716  # optimized: was 3.047
+    metric: auc
+    n_estimators: 4000
+    random_state: 42
+    verbosity: -1              # Suppress warnings/spam
+    force_col_wise: true       # Better for many features
+    n_jobs: 1                  # Use 1 thread per worker (critical for parallel optimization!)
+  early_stopping_rounds: 250
+  log_every_n: 100
+
+cv:
+  mode: purged          # optimal from sweep
+  n_splits: 5           # optimal from sweep
+  embargo_pct: 0.0      # optimal from sweep
+
+paths:
+  raw: data_raw
+  artifacts: artifacts
+  signals: signals
+  prices: data_raw
+
+signals:
+  min_score: 0.50        # Minimum signal score threshold
+  max_positions: 10      # Maximum number of positions
+
+risk:
+  max_position_size: 0.20  # Maximum weight per position (20%)
+
+# ============================================================================
+# PRODUCTION CONFIGURATION
+# Deployment, monitoring, and risk management settings
+# ============================================================================
+
+production:
+  # Signal generation settings
+  signal_generation:
+    enabled: true
+    max_position_size: 0.2      # Max 20% position size
+    min_positions: 3            # Minimum number of positions
+    risk_checks: true           # Enable risk validation
+    time: "06:00"              # Daily generation time (UTC)
+    
+  # Monitoring and alerting
+  monitoring:
+    enabled: true
+    alert_thresholds:
+      max_drawdown: 0.15        # Alert if drawdown > 15%
+      max_position_violation: 0.25  # Alert if position > 25%
+      min_daily_positions: 2    # Alert if < 2 positions
+      min_sharpe: 1.0          # Alert if Sharpe < 1.0
+      
+  # Backup and data retention
+  backup:
+    enabled: true
+    retention_days: 90          # Keep backups for 90 days
+    
+  # Risk management parameters
+  risk:
+    max_position_weight: 0.20   # Maximum single position weight
+    max_total_weight: 1.0       # Maximum total portfolio weight
+    min_signal_quality: 0.4     # Minimum signal score threshold
+    max_correlation: 0.7        # Maximum position correlation
+    sector_max_weight: 0.4      # Maximum sector concentration
+    
+  # Performance tracking
+  performance:
+    benchmark: "SPY"
+    rebalance_frequency: "daily"
+    cost_per_trade_bps: 5       # Trading costs in basis points
+    slippage_bps: 2            # Market impact slippage
+
+# ============================================================================
+# SWEEP CONFIGURATION (for optimization runs)
+# ============================================================================
+
+sweep:
+  horizon_days: [1, 2, 3]                      # Focus around optimized 2-day
+  take_profit: [0.015, 0.02]                   # Focus around optimized 1.5%
+  stop_loss: [0.035, 0.045]                    # Focus around optimized 4.5%
+  embargo_pct: [0.0]                           # Keep simple
+  market_feature_mode: [lag1, raw]             # Test key modes

@@ -1,0 +1,17 @@
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+yfinance>=0.2
+tqdm>=4.66
+pyyaml>=6.0
+joblib>=1.4
+backtrader>=1.9.78.123
+pyarrow>=17.0.0
+matplotlib>=3.8
+seaborn>=0.13
+plotly>=5.17
+streamlit>=1.35
+optuna>=3.6
+scipy>=1.11
+# qlib is optional; comment out if you don't want it right away
+# pyqlib>=0.9.0
