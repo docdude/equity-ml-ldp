@@ -51,10 +51,13 @@ for ticker in tickers:
         df['date'] = pd.to_datetime(df['date'])
         df = df.set_index('date')
     
+    # Clean data - drop rows with NaN in OHLCV columns
+    df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+    
     features = feature_engineer.create_all_features(df)
     barriers = feature_engineer.create_dynamic_triple_barriers(df)
     combined = pd.concat([features, barriers], axis=1).dropna()
-    prices_aligned = df.loc[combined.index, ['close']]
+    prices_aligned = df.loc[combined.index, ['Close']]
     
     # Store features and use exit_return from barriers (aligned with training/evaluation!)
     ticker_features = combined[features.columns].copy()

@@ -26,9 +26,11 @@ def download_prices(tickers, start, end, interval='1d'):
         data['ticker'] = tickers[0]
         data = data.reset_index().rename(columns={'index':'date'})
 
-    data = data.rename(columns={
-        'Open':'open','High':'high','Low':'low','Close':'close','Adj Close':'adj_close','Volume':'volume'
-    })
+    # Keep yfinance's capitalized column names: Open, High, Low, Close, Volume
+    # This is the standard convention used by financial libraries
+    if 'Adj Close' in data.columns:
+        data = data.rename(columns={'Adj Close': 'Close'})
+    
     return data
 
 

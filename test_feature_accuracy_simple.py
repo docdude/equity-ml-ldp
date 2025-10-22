@@ -15,7 +15,13 @@ print("╚"+"="*78+"╝\n")
 print("Loading test data (AAPL)...")
 df = pd.read_parquet('data_raw/AAPL.parquet')
 df['date'] = pd.to_datetime(df['date'])
-df = df.set_index('date').iloc[200:400]  # Use middle section, 200 days
+df = df.set_index('date')
+
+# FIX: Drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+
+# Use middle section after cleaning
+df = df.iloc[200:400]  # 200 days
 
 print(f"Data range: {df.index[0].date()} to {df.index[-1].date()}")
 print(f"Total samples: {len(df)}\n")
@@ -33,7 +39,7 @@ print("TEST 1: RETURNS")
 print('='*80)
 
 # Test log returns
-manual_return = np.log(df['close'] / df['close'].shift(1))
+manual_return = np.log(df['Close'] / df['Close'].shift(1))
 calc_return = features['log_return_1d']
 
 print(f"\nSample returns (days 50-55):")
@@ -48,7 +54,7 @@ print("TEST 2: VOLATILITY (Close-to-Close)")
 print('='*80)
 
 # Test simple volatility
-manual_vol = df['close'].pct_change().rolling(20).std()
+manual_vol = df['Close'].pct_change().rolling(20).std()
 calc_vol = features['volatility_cc_20']
 
 print(f"\nSample volatility (days 50-55):")
@@ -63,7 +69,7 @@ print("TEST 3: VOLUME NORMALIZATION")
 print('='*80)
 
 # Test volume normalization
-manual_vol_norm = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+manual_vol_norm = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
 calc_vol_norm = features['volume_norm']
 
 print(f"\nSample volume norm (days 50-55):")
@@ -78,9 +84,9 @@ print("TEST 4: CHAIKIN MONEY FLOW (CMF)")
 print('='*80)
 
 # Test CMF calculation
-mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'] + 1e-10)
-mfv = mfm * df['volume']
-manual_cmf = mfv.rolling(20).sum() / (df['volume'].rolling(20).sum() + 1e-8)
+mfm = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'] + 1e-10)
+mfv = mfm * df['Volume']
+manual_cmf = mfv.rolling(20).sum() / (df['Volume'].rolling(20).sum() + 1e-8)
 calc_cmf = features['cmf']
 
 print(f"\nSample CMF (days 50-55):")
@@ -101,7 +107,7 @@ print("TEST 5: RSI (Relative Strength Index)")
 print('='*80)
 
 # Test RSI against talib
-rsi_talib = talib.RSI(df['close'], 14)
+rsi_talib = talib.RSI(df['Close'], 14)
 calc_rsi = features['rsi_14']
 
 print(f"\nSample RSI (days 50-55):")
@@ -122,7 +128,7 @@ print("TEST 6: MACD")
 print('='*80)
 
 # Test MACD
-macd_talib, signal_talib, hist_talib = talib.MACD(df['close'])
+macd_talib, signal_talib, hist_talib = talib.MACD(df['Close'])
 calc_macd = features['macd']
 calc_signal = features['macd_signal']
 
@@ -138,15 +144,15 @@ print("TEST 7: OBV (On-Balance Volume)")
 print('='*80)
 
 # Test OBV against talib
-obv_talib = talib.OBV(df['close'], df['volume'])
+obv_talib = talib.OBV(df['Close'], df['Volume'])
 
 # Manual OBV calculation
 obv_manual = [0]
 for i in range(1, len(df)):
-    if df['close'].iloc[i] > df['close'].iloc[i-1]:
-        obv_manual.append(obv_manual[-1] + df['volume'].iloc[i])
-    elif df['close'].iloc[i] < df['close'].iloc[i-1]:
-        obv_manual.append(obv_manual[-1] - df['volume'].iloc[i])
+    if df['Close'].iloc[i] > df['Close'].iloc[i-1]:
+        obv_manual.append(obv_manual[-1] + df['Volume'].iloc[i])
+    elif df['Close'].iloc[i] < df['Close'].iloc[i-1]:
+        obv_manual.append(obv_manual[-1] - df['Volume'].iloc[i])
     else:
         obv_manual.append(obv_manual[-1])
 

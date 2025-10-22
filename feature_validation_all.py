@@ -261,9 +261,9 @@ def main():
 
     # --- MICROSTRUCTURE / LIQUIDITY ---
     if "vpin" in feats:
-        price_change = df['close'].diff()
-        buy_volume = df['volume'].where(price_change > 0, 0)
-        sell_volume = df['volume'].where(price_change < 0, 0)
+        price_change = df['Close'].diff()
+        buy_volume = df['Volume'].where(price_change > 0, 0)
+        sell_volume = df['Volume'].where(price_change < 0, 0)
         total_volume = buy_volume + sell_volume
         bucket_id = (total_volume.cumsum() // 50).astype(int)
         vpin = pd.Series(index=df.index, dtype=float)

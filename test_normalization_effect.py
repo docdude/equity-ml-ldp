@@ -8,12 +8,16 @@ from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 # Load one ticker
 print("Loading AAPL data...")
-df = pd.read_parquet('data_raw/AAPL.parquet')
+df = pd.read_parquet('data_raw/SMCI.parquet')
+
+# Clean data - drop rows with NaN in OHLCV columns
+df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+
 print(f"Loaded {len(df)} rows")
 
 # Create features
 print("\nCreating features...")
-feature_engineer = EnhancedFinancialFeatures(feature_preset='wavenet_optimized')
+feature_engineer = EnhancedFinancialFeatures(feature_preset='wavenet_optimized_v2')
 features = feature_engineer.create_all_features(df)
 print(f"Created {len(features.columns)} features")
 
@@ -22,8 +26,8 @@ X = features.values
 print(f"\nFeature matrix shape: {X.shape}")
 
 # Apply RobustScaler (same as training)
-print("\nApplying RobustScaler...")
-scaler = RobustScaler()
+print("\nApplying MinMaxScaler...")
+scaler = MinMaxScaler()
 X_scaled = scaler.fit_transform(X)
 
 print(f"\n{'='*80}")
@@ -35,7 +39,7 @@ print(f"  Min:  {X.min():.4f}")
 print(f"  Max:  {X.max():.4f}")
 
 print(f"\n{'='*80}")
-print(f"AFTER ROBUST NORMALIZATION")
+print(f"AFTER MINMAX NORMALIZATION")
 print(f"{'='*80}")
 print(f"  Mean: {X_scaled.mean():.4f}")
 print(f"  Std:  {X_scaled.std():.4f}")

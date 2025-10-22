@@ -180,7 +180,7 @@ def main():
             df = df.set_index('date')
         
         # Clean data: Remove rows with NaN prices (IPO dates, data gaps)
-        df = df.dropna(subset=['close', 'open', 'high', 'low'])
+        df = df.dropna(subset=['Close', 'Open', 'High', 'Low'])
         
         if len(df) < 50:  # Skip tickers with insufficient data
             print(f"  ⚠️  Skipping {ticker}: Only {len(df)} valid rows")
@@ -201,7 +201,7 @@ def main():
             continue
         
         # Align prices with features (critical for forward calculations)
-        prices_aligned = df.loc[combined.index, 'close']
+        prices_aligned = df.loc[combined.index, 'Close']
         
         # ✅ USE EXIT_RETURN FROM BARRIERS (align with fin_model_evaluation.py)
         # This is the López de Prado / MLFinLab method

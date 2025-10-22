@@ -61,14 +61,20 @@ def test_volatility():
     # Load real data for realistic test  
     df = pd.read_parquet('data_raw/AAPL.parquet')
     df['date'] = pd.to_datetime(df['date'])
-    df = df.set_index('date').iloc[100:300]  # Skip early data, use 200 days
+    df = df.set_index('date')
+    
+    # FIX: Drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+    df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+    
+    # Skip early data, use 200 days
+    df = df.iloc[100:300]
     
     config = FeatureConfig.get_preset('minimal')
     feature_eng = EnhancedFinancialFeatures(feature_config=config)
     features = feature_eng.create_all_features(df)
     
     # Test 1: Close-to-close volatility
-    manual_vol_cc = df['close'].pct_change().rolling(20).std()
+    manual_vol_cc = df['Close'].pct_change().rolling(20).std()
     calculated_vol_cc = features['volatility_cc_20']
     
     print(f"\nClose-to-Close Volatility (20-day):")
@@ -78,7 +84,7 @@ def test_volatility():
     match1 = np.allclose(manual_vol_cc.dropna(), calculated_vol_cc.dropna(), rtol=1e-5)
     
     # Test 2: Parkinson volatility (using talib for reference)
-    hl = np.log(df['high'] / df['low'])
+    hl = np.log(df['High'] / df['Low'])
     manual_parkinson = hl.rolling(20).apply(lambda x: np.sqrt(np.mean(x**2) / (4 * np.log(2))))
     calculated_parkinson = features['volatility_parkinson_20']
     
@@ -109,7 +115,7 @@ def test_volume_features():
     features = feature_eng.create_all_features(df)
     
     # Test 1: Volume normalization
-    manual_vol_norm = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+    manual_vol_norm = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
     calculated_vol_norm = features['volume_norm']
     
     print(f"\nVolume Normalization (volume / MA20):")
@@ -119,9 +125,9 @@ def test_volume_features():
     match1 = np.allclose(manual_vol_norm.dropna(), calculated_vol_norm.dropna(), rtol=1e-5)
     
     # Test 2: CMF calculation
-    mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'] + 1e-10)
-    mfv = mfm * df['volume']
-    manual_cmf = mfv.rolling(20).sum() / (df['volume'].rolling(20).sum() + 1e-8)
+    mfm = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'] + 1e-10)
+    mfv = mfm * df['Volume']
+    manual_cmf = mfv.rolling(20).sum() / (df['Volume'].rolling(20).sum() + 1e-8)
     calculated_cmf = features['cmf']
     
     print(f"\nChaikin Money Flow (20-day):")
@@ -137,13 +143,13 @@ def test_volume_features():
     print(f"In range: {cmf_in_range}")
     
     # Test 4: OBV comparison with talib
-    obv_talib = talib.OBV(df['close'], df['volume'])
+    obv_talib = talib.OBV(df['Close'], df['Volume'])
     obv_manual = [0]
     for i in range(1, len(df)):
-        if df['close'].iloc[i] > df['close'].iloc[i-1]:
-            obv_manual.append(obv_manual[-1] + df['volume'].iloc[i])
-        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
-            obv_manual.append(obv_manual[-1] - df['volume'].iloc[i])
+        if df['Close'].iloc[i] > df['Close'].iloc[i-1]:
+            obv_manual.append(obv_manual[-1] + df['Volume'].iloc[i])
+        elif df['Close'].iloc[i] < df['Close'].iloc[i-1]:
+            obv_manual.append(obv_manual[-1] - df['Volume'].iloc[i])
         else:
             obv_manual.append(obv_manual[-1])
     
@@ -182,7 +188,7 @@ def test_momentum_indicators():
     features = feature_eng.create_all_features(df)
     
     # Test 1: RSI
-    rsi_talib = talib.RSI(df['close'], 14)
+    rsi_talib = talib.RSI(df['Close'], 14)
     calculated_rsi = features['rsi_14']
     
     print(f"\nRSI (14):")
@@ -192,7 +198,7 @@ def test_momentum_indicators():
     match1 = np.allclose(rsi_talib.dropna(), calculated_rsi.dropna(), rtol=1e-3)
     
     # Test 2: MACD
-    macd_talib, signal_talib, hist_talib = talib.MACD(df['close'])
+    macd_talib, signal_talib, hist_talib = talib.MACD(df['Close'])
     calculated_macd = features['macd']
     calculated_signal = features['macd_signal']
     
@@ -229,7 +235,7 @@ def test_trend_indicators():
     features = feature_eng.create_all_features(df)
     
     # Test 1: ADX
-    adx_talib = talib.ADX(df['high'], df['low'], df['close'])
+    adx_talib = talib.ADX(df['High'], df['Low'], df['Close'])
     calculated_adx = features['adx']
     
     print(f"\nADX (14):")
@@ -239,8 +245,8 @@ def test_trend_indicators():
     match1 = np.allclose(adx_talib.dropna(), calculated_adx.dropna(), rtol=1e-3)
     
     # Test 2: Distance from MA
-    ma10 = df['close'].rolling(10).mean()
-    manual_dist = (df['close'] - ma10) / (ma10 + 1e-8)
+    ma10 = df['Close'].rolling(10).mean()
+    manual_dist = (df['Close'] - ma10) / (ma10 + 1e-8)
     calculated_dist = features['dist_from_ma10']
     
     print(f"\nDistance from MA10:")
@@ -270,7 +276,7 @@ def test_bollinger_bands():
     features = feature_eng.create_all_features(df)
     
     # Test with talib
-    bb_upper_talib, bb_middle_talib, bb_lower_talib = talib.BBANDS(df['close'], timeperiod=20)
+    bb_upper_talib, bb_middle_talib, bb_lower_talib = talib.BBANDS(df['Close'], timeperiod=20)
     calculated_upper = features['bb_upper']
     calculated_lower = features['bb_lower']
     

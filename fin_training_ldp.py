@@ -302,10 +302,10 @@ def main():
     print("\n1. ENHANCED FEATURE ENGINEERING")
     print("-"*40)
     
-    tickers = ['AAPL', 'DELL', 'JOBY', 'LCID', 'SMCI', 'NVDA', 'TSLA', 'WDAY', 'AMZN', 'AVGO']
-    #tickers = ['AAPL']  # For testing
+    #tickers = ['AAPL', 'DELL', 'JOBY', 'LCID', 'SMCI', 'NVDA', 'TSLA', 'WDAY', 'AMZN', 'AVGO']
+    tickers = ['AAPL']  # For testing
     
-    CONFIG_PRESET = 'wavenet_optimized_v2'
+    CONFIG_PRESET = 'wavenet_optimized_min'
     config = FeatureConfig.get_preset(CONFIG_PRESET)
     feature_engineer = EnhancedFinancialFeatures(feature_config=config)
     
@@ -331,7 +331,7 @@ def main():
     
     # Market features configuration (based on wavenet_optimized_v2 analysis)
     # See WAVENET_V2_USAGE.md for rationale
-    MARKET_FEATURES = ['fvx', 'tyx']  # Treasury yields (rank 8/14 orthogonal)
+    MARKET_FEATURES = ['gold', 'fvx', 'tyx']  # Treasury yields (rank 8/14 orthogonal)
     # Options: ['spy', 'vix', 'fvx', 'tyx', 'gold', 'jpyx']
     # Recommended: ['fvx', 'tyx'] - unique macro risk signals
     # Optional: ['gold'] - rank 13/21, consistent performer
@@ -553,7 +553,7 @@ def main():
     model.compile(
         optimizer=optimizer,
         loss=focal_loss,  # Single loss for direction
-        metrics=['accuracy', tf.keras.metrics.AUC(name='auc')],
+        metrics=['accuracy', tf.keras.metrics.AUC(name='auc', multi_label=True, num_labels=3, from_logits=False)],
         weighted_metrics=['accuracy']
     )
     

@@ -15,6 +15,10 @@ def main():
     # Load test data
     print("\n📊 Loading test data (AAPL)...")
     df = pd.read_parquet('data_raw/AAPL.parquet')
+    
+    # FIX: Drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+    df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+    
     print(f"   Shape: {df.shape}")
     print(f"   Date range: {df.index[0]} to {df.index[-1]}")
     

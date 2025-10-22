@@ -222,8 +222,9 @@ def main():
     print("\n2. Loading sequences with market context + actual returns...")
     
     # Use same config as training
-    CONFIG_PRESET = metadata.get('config_preset', 'wavenet_optimized_v2')
-    tickers = metadata.get('tickers', ['AAPL'])
+    CONFIG_PRESET = metadata.get('config_preset', 'wavenet_optimized_min')
+    #tickers = metadata.get('tickers', ['AAPL'])
+    tickers = ['AAPL']  # For testing
     barrier_params = metadata['barrier_params']
     market_features = metadata.get('market_features', None)  # Get from training metadata
     seq_len = 20
@@ -355,7 +356,7 @@ def main():
     #                   More selective trading on confident predictions generalizes well
     #   - [0.50, 0.75]: Very low activity → near-zero variance → division by zero → NaN
     # Result: [0.30, 0.70] gives best strategy differentiation + low overfitting risk
-    confidence_thresholds = np.linspace(0.650, 0.70, n_strategies)
+    confidence_thresholds = np.linspace(0.30, 0.70, n_strategies)
     
     for i, threshold in enumerate(confidence_thresholds):
         # Create signals using meta-labeling (bet sizing)

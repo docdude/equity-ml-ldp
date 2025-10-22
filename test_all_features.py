@@ -18,7 +18,13 @@ print("╚"+"="*78+"╝\n")
 print("Loading test data (AAPL)...")
 df = pd.read_parquet('data_raw/AAPL.parquet')
 df['date'] = pd.to_datetime(df['date'])
-df = df.set_index('date').iloc[200:400]  # Use middle section, 200 days
+df = df.set_index('date')
+
+# FIX: Drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+
+# Use middle section after cleaning
+df = df.iloc[200:400]  # 200 days
 
 print(f"Data range: {df.index[0].date()} to {df.index[-1].date()}")
 print(f"Total samples: {len(df)}")
@@ -108,7 +114,7 @@ for horizon in [1, 2, 3, 5, 10, 20]:
     feat_name = f'log_return_{horizon}d'
     if feat_name in features.columns:
         # Manual calculation
-        manual = np.log(df['close'] / df['close'].shift(horizon))
+        manual = np.log(df['Close'] / df['Close'].shift(horizon))
         results.append(validate_feature(feat_name, features[feat_name], 
                                        reference_data=manual, check_type='match'))
 
@@ -128,7 +134,7 @@ print("-" * 80)
 for period in [20, 60]:
     feat_name = f'volatility_cc_{period}'
     if feat_name in features.columns:
-        manual = df['close'].pct_change().rolling(period).std()
+        manual = df['Close'].pct_change().rolling(period).std()
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=0, expected_max=1.0,
                                        reference_data=manual, check_type='both'))
@@ -182,13 +188,13 @@ print("-" * 80)
 
 # Volume ROC
 if 'volume_roc' in features.columns:
-    manual = df['volume'].pct_change(5)
+    manual = df['Volume'].pct_change(5)
     results.append(validate_feature('volume_roc', features['volume_roc'],
                                    reference_data=manual, check_type='match'))
 
 # Dollar volume ratio
 if 'dollar_volume_ma_ratio' in features.columns:
-    dollar_vol = df['volume'] * df['close']
+    dollar_vol = df['Volume'] * df['Close']
     manual = dollar_vol / (dollar_vol.rolling(20).mean() + 1e-8)
     results.append(validate_feature('dollar_volume_ma_ratio', features['dollar_volume_ma_ratio'],
                                    expected_min=0, expected_max=10.0,
@@ -196,21 +202,21 @@ if 'dollar_volume_ma_ratio' in features.columns:
 
 # Volume normalization
 if 'volume_norm' in features.columns:
-    manual = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+    manual = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
     results.append(validate_feature('volume_norm', features['volume_norm'],
                                    expected_min=0, expected_max=10.0,
                                    reference_data=manual, check_type='both'))
 
 # Volume z-score
 if 'volume_zscore' in features.columns:
-    manual = (df['volume'] - df['volume'].rolling(20).mean()) / (df['volume'].rolling(20).std() + 1e-8)
+    manual = (df['Volume'] - df['Volume'].rolling(20).mean()) / (df['Volume'].rolling(20).std() + 1e-8)
     results.append(validate_feature('volume_zscore', features['volume_zscore'],
                                    expected_min=-5, expected_max=5,
                                    reference_data=manual, check_type='both'))
 
 # VWAP
 if 'vwap_20' in features.columns:
-    manual = (df['close'] * df['volume']).rolling(20).sum() / (df['volume'].rolling(20).sum() + 1e-8)
+    manual = (df['Close'] * df['Volume']).rolling(20).sum() / (df['Volume'].rolling(20).sum() + 1e-8)
     results.append(validate_feature('vwap_20', features['vwap_20'],
                                    reference_data=manual, check_type='match'))
 
@@ -246,16 +252,16 @@ if 'ad_roc' in features.columns:
 
 # CMF - CRITICAL TEST
 if 'cmf' in features.columns:
-    mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'] + 1e-10)
-    mfv = mfm * df['volume']
-    manual = mfv.rolling(20).sum() / (df['volume'].rolling(20).sum() + 1e-8)
+    mfm = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'] + 1e-10)
+    mfv = mfm * df['Volume']
+    manual = mfv.rolling(20).sum() / (df['Volume'].rolling(20).sum() + 1e-8)
     results.append(validate_feature('cmf', features['cmf'],
                                    expected_min=-1.0, expected_max=1.0,
                                    reference_data=manual, check_type='both'))
 
 # Relative volume
 if 'relative_volume' in features.columns:
-    manual = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+    manual = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
     results.append(validate_feature('relative_volume', features['relative_volume'],
                                    expected_min=0, expected_max=10.0,
                                    reference_data=manual, check_type='both'))
@@ -270,7 +276,7 @@ print("-" * 80)
 for period in [7, 14, 21]:
     feat_name = f'rsi_{period}'
     if feat_name in features.columns:
-        ref = talib.RSI(df['close'], period)
+        ref = talib.RSI(df['Close'], period)
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=0, expected_max=100,
                                        reference_data=ref, check_type='both', tolerance=1e-3))
@@ -279,11 +285,11 @@ for period in [7, 14, 21]:
 for feat_name in ['macd', 'macd_signal', 'macd_hist', 'macd_divergence']:
     if feat_name in features.columns:
         if feat_name == 'macd':
-            ref, _, _ = talib.MACD(df['close'])
+            ref, _, _ = talib.MACD(df['Close'])
         elif feat_name == 'macd_signal':
-            _, ref, _ = talib.MACD(df['close'])
+            _, ref, _ = talib.MACD(df['Close'])
         elif feat_name in ['macd_hist', 'macd_divergence']:
-            macd, signal, _ = talib.MACD(df['close'])
+            macd, signal, _ = talib.MACD(df['Close'])
             ref = macd - signal
         
         results.append(validate_feature(feat_name, features[feat_name],
@@ -292,7 +298,7 @@ for feat_name in ['macd', 'macd_signal', 'macd_hist', 'macd_divergence']:
 # Stochastic
 for feat_name in ['stoch_k', 'stoch_d']:
     if feat_name in features.columns:
-        slowk, slowd = talib.STOCH(df['high'], df['low'], df['close'])
+        slowk, slowd = talib.STOCH(df['High'], df['Low'], df['Close'])
         ref = slowk if feat_name == 'stoch_k' else slowd
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=0, expected_max=100,
@@ -305,14 +311,14 @@ if 'stoch_k_d_diff' in features.columns:
 
 # Williams %R
 if 'williams_r' in features.columns:
-    ref = talib.WILLR(df['high'], df['low'], df['close'])
+    ref = talib.WILLR(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('williams_r', features['williams_r'],
                                    expected_min=-100, expected_max=0,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
 
 # ATR
 if 'atr' in features.columns:
-    ref = talib.ATR(df['high'], df['low'], df['close'])
+    ref = talib.ATR(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('atr', features['atr'],
                                    expected_min=0, expected_max=50,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
@@ -324,14 +330,14 @@ if 'atr_ratio' in features.columns:
 
 # CCI
 if 'cci' in features.columns:
-    ref = talib.CCI(df['high'], df['low'], df['close'])
+    ref = talib.CCI(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('cci', features['cci'],
                                    expected_min=-500, expected_max=500,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
 
 # Return z-score
 if 'return_zscore_20' in features.columns:
-    returns = df['close'].pct_change()
+    returns = df['Close'].pct_change()
     manual = (returns - returns.rolling(20).mean()) / (returns.rolling(20).std() + 1e-8)
     results.append(validate_feature('return_zscore_20', features['return_zscore_20'],
                                    expected_min=-5, expected_max=5,
@@ -341,7 +347,7 @@ if 'return_zscore_20' in features.columns:
 for period in [10, 20]:
     feat_name = f'roc_{period}'
     if feat_name in features.columns:
-        ref = talib.ROC(df['close'], period)
+        ref = talib.ROC(df['Close'], period)
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=-50, expected_max=50,
                                        reference_data=ref, check_type='both', tolerance=1e-3))
@@ -354,29 +360,29 @@ print("-" * 80)
 
 # ADX
 if 'adx' in features.columns:
-    ref = talib.ADX(df['high'], df['low'], df['close'])
+    ref = talib.ADX(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('adx', features['adx'],
                                    expected_min=0, expected_max=100,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
 
 # ADX Plus/Minus
 if 'adx_plus' in features.columns:
-    ref = talib.PLUS_DI(df['high'], df['low'], df['close'])
+    ref = talib.PLUS_DI(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('adx_plus', features['adx_plus'],
                                    expected_min=0, expected_max=100,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
 
 if 'adx_minus' in features.columns:
-    ref = talib.MINUS_DI(df['high'], df['low'], df['close'])
+    ref = talib.MINUS_DI(df['High'], df['Low'], df['Close'])
     results.append(validate_feature('adx_minus', features['adx_minus'],
                                    expected_min=0, expected_max=100,
                                    reference_data=ref, check_type='both', tolerance=1e-3))
 
 # Parabolic SAR
 if 'sar' in features.columns:
-    ref = talib.SAR(df['high'], df['low'])
+    ref = talib.SAR(df['High'], df['Low'])
     results.append(validate_feature('sar', features['sar'],
-                                   expected_min=0, expected_max=df['high'].max() * 1.2,
+                                   expected_min=0, expected_max=df['High'].max() * 1.2,
                                    reference_data=ref, check_type='both', tolerance=1e-2))
 
 if 'sar_signal' in features.columns:
@@ -387,7 +393,7 @@ if 'sar_signal' in features.columns:
 # Aroon
 for feat_name in ['aroon_up', 'aroon_down']:
     if feat_name in features.columns:
-        down, up = talib.AROON(df['high'], df['low'])
+        down, up = talib.AROON(df['High'], df['Low'])
         ref = up if feat_name == 'aroon_up' else down
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=0, expected_max=100,
@@ -402,8 +408,8 @@ if 'aroon_oscillator' in features.columns:
 for period in [10, 20]:
     feat_name = f'dist_from_ma{period}'
     if feat_name in features.columns:
-        ma = df['close'].rolling(period).mean()
-        manual = (df['close'] - ma) / (ma + 1e-8)
+        ma = df['Close'].rolling(period).mean()
+        manual = (df['Close'] - ma) / (ma + 1e-8)
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=-1.0, expected_max=1.0,
                                        reference_data=manual, check_type='both'))
@@ -415,7 +421,7 @@ print("\n6. BOLLINGER BANDS")
 print("-" * 80)
 
 # Bollinger Bands
-bb_upper_ref, bb_middle_ref, bb_lower_ref = talib.BBANDS(df['close'], timeperiod=20)
+bb_upper_ref, bb_middle_ref, bb_lower_ref = talib.BBANDS(df['Close'], timeperiod=20)
 
 for feat_name in ['bb_upper', 'bb_lower']:
     if feat_name in features.columns:
@@ -424,7 +430,7 @@ for feat_name in ['bb_upper', 'bb_lower']:
                                        reference_data=ref, check_type='match', tolerance=1e-3))
 
 if 'bb_position' in features.columns:
-    manual = (df['close'] - bb_lower_ref) / (bb_upper_ref - bb_lower_ref + 1e-8)
+    manual = (df['Close'] - bb_lower_ref) / (bb_upper_ref - bb_lower_ref + 1e-8)
     results.append(validate_feature('bb_position', features['bb_position'],
                                    expected_min=-0.5, expected_max=1.5,
                                    reference_data=manual, check_type='both'))
@@ -448,7 +454,7 @@ print("-" * 80)
 
 # Price position in daily range
 if 'price_position' in features.columns:
-    manual = (df['close'] - df['low']) / (df['high'] - df['low'] + 1e-8)
+    manual = (df['Close'] - df['Low']) / (df['High'] - df['Low'] + 1e-8)
     results.append(validate_feature('price_position', features['price_position'],
                                    expected_min=0, expected_max=1.0,
                                    reference_data=manual, check_type='both'))
@@ -457,21 +463,21 @@ if 'price_position' in features.columns:
 for period in [50, 200]:
     feat_name = f'dist_from_ma{period}'
     if feat_name in features.columns:
-        ma = df['close'].rolling(period).mean()
-        manual = (df['close'] - ma) / (ma + 1e-8)
+        ma = df['Close'].rolling(period).mean()
+        manual = (df['Close'] - ma) / (ma + 1e-8)
         results.append(validate_feature(feat_name, features[feat_name],
                                        expected_min=-1.0, expected_max=2.0,
                                        reference_data=manual, check_type='both'))
 
 # Distance from highs/lows
 if 'dist_from_20d_high' in features.columns:
-    manual = df['close'] / df['high'].rolling(20).max() - 1
+    manual = df['Close'] / df['High'].rolling(20).max() - 1
     results.append(validate_feature('dist_from_20d_high', features['dist_from_20d_high'],
                                    expected_min=-1.0, expected_max=0.1,
                                    reference_data=manual, check_type='both'))
 
 if 'dist_from_20d_low' in features.columns:
-    manual = df['close'] / df['low'].rolling(20).min() - 1
+    manual = df['Close'] / df['Low'].rolling(20).min() - 1
     results.append(validate_feature('dist_from_20d_low', features['dist_from_20d_low'],
                                    expected_min=0, expected_max=1.0,
                                    reference_data=manual, check_type='both'))

@@ -9,6 +9,10 @@ from feature_config import FeatureConfig
 # Load one ticker
 print("Loading AAPL data...")
 df = pd.read_parquet('data_raw/AAPL.parquet')
+
+# Clean data - drop rows with NaN in OHLCV columns
+df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+
 print(f"Loaded {len(df)} rows")
 
 # Create features using wavenet_optimized preset

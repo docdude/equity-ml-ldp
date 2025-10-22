@@ -204,7 +204,7 @@ class MinMaxNormalizer(FeatureNormalizer):
     Use only for bounded features like RSI, not recommended for financial returns.
     """
     
-    def __init__(self, feature_range: Tuple[float, float] = (-1, 1)):
+    def __init__(self, feature_range: Tuple[float, float] = (0, 1)):
         self.scaler = MinMaxScaler(feature_range=feature_range)
         self.feature_range = feature_range
         self._is_fitted = False

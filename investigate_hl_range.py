@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 df = pd.read_parquet('data_raw/AAPL.parquet')
-hl_range_raw = (df['high'] - df['low']) / df['close']
+hl_range_raw = (df['high'] - df['low']) / df['Close']
 
 print("HL Range statistics:")
 print(f"  Mean: {hl_range_raw.mean():.6f}")

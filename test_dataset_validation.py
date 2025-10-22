@@ -44,8 +44,8 @@ for ticker in tickers[:3]:  # Test with just 3 tickers for speed
         df['date'] = pd.to_datetime(df['date'])
         df = df.set_index('date')
     
-    # Clean data
-    df = df.dropna(subset=['close', 'open', 'high', 'low'])
+    # Clean data - drop rows with NaN in OHLCV columns
+    df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
     
     if len(df) < 50:
         print(f"  ⚠️  Skipping {ticker}: Only {len(df)} valid rows")

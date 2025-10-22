@@ -47,7 +47,7 @@ conservative_config = {
 balanced_config = {
     'model_parameters': {
         'n_classes': 3,
-        'wavenet_filters': 64,
+        'wavenet_filters': 32,
         'wavenet_blocks': 3,
         'wavenet_layers_per_block': 3,
         'conv_filters': [64, 128, 256],
@@ -57,15 +57,15 @@ balanced_config = {
         'l2_reg': 0.01
     },
     'training_parameters': {
-        'learning_rate': 0.000007,  # Middle ground
+        'learning_rate': 0.0001,  
         'beta_1': 0.9,
         'beta_2': 0.999,
         'clipnorm': 1.0,  # Gradient clipping
         'batch_size': 64,  # Standard
         'max_epochs': 150,
         'steps_per_epoch': None,  # Use all data
-        'early_stopping_patience': 20,
-        'reduce_lr_patience': 20,
+        'early_stopping_patience': 150,
+        'reduce_lr_patience': 150,
         'reduce_lr_factor': 0.5,
         'min_lr': 1e-7,
         'direction_loss_weight': 1.0,

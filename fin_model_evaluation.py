@@ -76,7 +76,7 @@ def main(model=None, model_name="RandomForest"):
         combined = combined.dropna()
         
         # Get aligned prices for forward return calculation
-        prices_aligned = df.loc[combined.index, ['close']]
+        prices_aligned = df.loc[combined.index, ['Close']]
         
         # Store features including exit_return from barriers
         # CRITICAL: Use exit_return instead of fixed-horizon forward_return_5d

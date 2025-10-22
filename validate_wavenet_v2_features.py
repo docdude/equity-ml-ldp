@@ -45,8 +45,7 @@ class FeatureValidator:
         
         df = pd.read_parquet(data_path)
         
-        # Standardize column names
-        df.columns = df.columns.str.lower()
+        # Set date as index
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date')
@@ -212,7 +211,7 @@ class FeatureValidator:
         
         # 6. Correlation with price (sanity check)
         try:
-            price_corr = valid_values.corr(df['close'].loc[valid_values.index])
+            price_corr = valid_values.corr(df['Close'].loc[valid_values.index])
             results['price_correlation'] = float(price_corr) if not np.isnan(price_corr) else None
         except:
             results['price_correlation'] = None
@@ -310,33 +309,33 @@ class FeatureValidator:
         # Define TA-Lib mappings
         talib_mappings = {
             # Momentum indicators
-            'rsi_7': (talib.RSI, {'real': df['close'].values, 'timeperiod': 7}),
-            'rsi_14': (talib.RSI, {'real': df['close'].values, 'timeperiod': 14}),
-            'rsi_21': (talib.RSI, {'real': df['close'].values, 'timeperiod': 21}),
+            'rsi_7': (talib.RSI, {'real': df['Close'].values, 'timeperiod': 7}),
+            'rsi_14': (talib.RSI, {'real': df['Close'].values, 'timeperiod': 14}),
+            'rsi_21': (talib.RSI, {'real': df['Close'].values, 'timeperiod': 21}),
             
-            'macd': (lambda: talib.MACD(df['close'].values, 12, 26, 9)[0], {}),
-            'macd_signal': (lambda: talib.MACD(df['close'].values, 12, 26, 9)[1], {}),
-            'macd_hist': (lambda: talib.MACD(df['close'].values, 12, 26, 9)[2], {}),
+            'macd': (lambda: talib.MACD(df['Close'].values, 12, 26, 9)[0], {}),
+            'macd_signal': (lambda: talib.MACD(df['Close'].values, 12, 26, 9)[1], {}),
+            'macd_hist': (lambda: talib.MACD(df['Close'].values, 12, 26, 9)[2], {}),
             
-            'stoch_k': (lambda: talib.STOCH(df['high'].values, df['low'].values, df['close'].values, 14, 3, 0, 3, 0)[0], {}),
-            'stoch_d': (lambda: talib.STOCH(df['high'].values, df['low'].values, df['close'].values, 14, 3, 0, 3, 0)[1], {}),
+            'stoch_k': (lambda: talib.STOCH(df['High'].values, df['Low'].values, df['Close'].values, 14, 3, 0, 3, 0)[0], {}),
+            'stoch_d': (lambda: talib.STOCH(df['High'].values, df['Low'].values, df['Close'].values, 14, 3, 0, 3, 0)[1], {}),
             
-            'cci': (talib.CCI, {'high': df['high'].values, 'low': df['low'].values, 'close': df['close'].values, 'timeperiod': 14}),
+            'cci': (talib.CCI, {'high': df['High'].values, 'low': df['Low'].values, 'close': df['Close'].values, 'timeperiod': 14}),
             
-            'atr': (talib.ATR, {'high': df['high'].values, 'low': df['low'].values, 'close': df['close'].values, 'timeperiod': 14}),
+            'atr': (talib.ATR, {'high': df['High'].values, 'low': df['Low'].values, 'close': df['Close'].values, 'timeperiod': 14}),
             
             # Bollinger Bands
-            'bb_upper': (lambda: talib.BBANDS(df['close'].values, 20, 2, 2)[0], {}),
-            'bb_lower': (lambda: talib.BBANDS(df['close'].values, 20, 2, 2)[2], {}),
+            'bb_upper': (lambda: talib.BBANDS(df['Close'].values, 20, 2, 2)[0], {}),
+            'bb_lower': (lambda: talib.BBANDS(df['Close'].values, 20, 2, 2)[2], {}),
             
             # Trend indicators
-            'adx': (talib.ADX, {'high': df['high'].values, 'low': df['low'].values, 'close': df['close'].values, 'timeperiod': 14}),
-            'adx_plus': (talib.PLUS_DI, {'high': df['high'].values, 'low': df['low'].values, 'close': df['close'].values, 'timeperiod': 14}),
+            'adx': (talib.ADX, {'high': df['High'].values, 'low': df['Low'].values, 'close': df['Close'].values, 'timeperiod': 14}),
+            'adx_plus': (talib.PLUS_DI, {'high': df['High'].values, 'low': df['Low'].values, 'close': df['Close'].values, 'timeperiod': 14}),
             
-            'sar': (talib.SAR, {'high': df['high'].values, 'low': df['low'].values, 'acceleration': 0.02, 'maximum': 0.2}),
+            'sar': (talib.SAR, {'high': df['High'].values, 'low': df['Low'].values, 'acceleration': 0.02, 'maximum': 0.2}),
             
             # Volume indicators
-            'obv': (talib.OBV, {'close': df['close'].values, 'volume': df['volume'].values}),
+            'obv': (talib.OBV, {'close': df['Close'].values, 'volume': df['Volume'].values}),
         }
         
         if feature_name not in talib_mappings:
@@ -406,6 +405,11 @@ def main():
     validator = FeatureValidator(tolerance=0.01)  # 1% tolerance for TA-Lib
     df_raw = validator.load_test_data('AAPL')
     
+    # Clean data - drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+    df_raw = df_raw.dropna(subset=required_cols)
+    print(f"✅ Cleaned data: {len(df_raw)} rows after dropping NaN")
+    
     # Generate features
     print(f"\n🔧 Generating features with wavenet_optimized_v2 config...")
     feature_engineer = EnhancedFinancialFeatures(feature_config=config)
@@ -419,8 +423,19 @@ def main():
     print('='*80)
     
     for i, feature_name in enumerate(feature_list, 1):
-        print(f"\n[{i}/{len(feature_list)}] ", end='')
-        validator.validate_feature(feature_name, features_df, df_raw)
+        if i % 5 == 0:
+            print(f"  Progress: {i}/{len(feature_list)} features validated...")
+        
+        # Suppress detailed output during validation loop
+        import sys
+        from io import StringIO
+        old_stdout = sys.stdout
+        sys.stdout = StringIO()
+        
+        try:
+            validator.validate_feature(feature_name, features_df, df_raw)
+        finally:
+            sys.stdout = old_stdout
     
     # Generate summary report
     print(f"\n{'='*80}")
@@ -429,10 +444,11 @@ def main():
     
     report_df = validator.generate_report()
     
-    # Display report
+    # Display report (first 20 rows to avoid broken pipe)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 200)
-    print(f"\n{report_df.to_string(index=False)}")
+    print(f"\nShowing first 20 features:")
+    print(f"\n{report_df.head(20).to_string(index=False)}")
     
     # Save to file
     output_file = 'artifacts/wavenet_v2_feature_validation.csv'

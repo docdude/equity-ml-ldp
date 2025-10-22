@@ -402,12 +402,10 @@ def load_or_generate_sequences(
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date')
         
-        # Ensure proper column names
-        if 'close' in df.columns:
-            df['Close'] = df['close']
-        
-        # Clean data
-        df = df.dropna(subset=['Close'])
+        # Clean data - drop rows with NaN in any OHLCV column
+        # TA-Lib functions cannot handle NaN values
+        # Use capitalized column names (yfinance standard)
+        df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
         
         if len(df) < 100:
             if verbose:

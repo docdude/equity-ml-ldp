@@ -44,6 +44,10 @@ def main():
     # Load test data
     print("\n📊 Loading test data (AAPL)...")
     df = pd.read_parquet('data_raw/AAPL.parquet')
+    
+    # FIX: Drop NaN values in OHLCV columns (TA-Lib cannot handle NaN)
+    df = df.dropna(subset=['Open', 'High', 'Low', 'Close', 'Volume'])
+    
     print(f"   Shape: {df.shape}")
     print(f"   Columns: {list(df.columns)}")
     print(f"   Date range: {df.index[0]} to {df.index[-1]}")
@@ -90,7 +94,7 @@ def main():
     print("\n4. INFORMATION METHODS")
     print("-"*40)
     # Test with a small series for Shannon entropy
-    returns = df['close'].pct_change().dropna()
+    returns = df['Close'].pct_change().dropna()
     results['shannon_entropy'] = test_feature_method(
         feature_engineer, returns.head(50), '_shannon_entropy'
     )
@@ -110,7 +114,7 @@ def main():
     print("\n6. FRACTAL METHODS")
     print("-"*40)
     results['fractal_dimension'] = test_feature_method(
-        feature_engineer, df['close'], '_fractal_dimension', 20
+        feature_engineer, df['Close'], '_fractal_dimension', 20
     )
     
     print("\n7. LIQUIDITY METHODS")

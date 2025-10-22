@@ -100,7 +100,7 @@ class EnhancedFinancialFeatures:
             print("  → Returns (multi-horizon)")
             # Log returns at multiple horizons
             for horizon in [1, 2, 3, 5, 10, 20]:
-                features[f'log_return_{horizon}d'] = np.log(df['close'] / df['close'].shift(horizon))
+                features[f'log_return_{horizon}d'] = np.log(df['Close'] / df['Close'].shift(horizon))
             
             # Return acceleration
             features['return_acceleration'] = features['log_return_1d'].diff()
@@ -108,11 +108,11 @@ class EnhancedFinancialFeatures:
             # Forward returns (for labeling/targets)
           #  for horizon in [1, 3, 5]:
            #     features[f'forward_return_{horizon}d'] = np.log(
-            #        df['close'].shift(-horizon) / df['close']
+            #        df['Close'].shift(-horizon) / df['Close']
             #    )
         
         # Compute returns once for reuse
-        returns = df['close'].pct_change()
+        returns = df['Close'].pct_change()
         
         # 2. VOLATILITY GROUP - CRITICAL
         if config['volatility']:
@@ -174,20 +174,20 @@ class EnhancedFinancialFeatures:
             features['kyle_lambda'] = self._kyle_lambda(df)
             
             # Amihud illiquidity measure
-            features['amihud_illiquidity'] = np.abs(returns) / (df['volume'] * df['close'] + 1e-8)
+            features['amihud_illiquidity'] = np.abs(returns) / (df['Volume'] * df['Close'] + 1e-8)
             
             # High-low range (with winsorization + log transform to handle extreme volatility days)
             # Note: hl_range can spike to extreme values on volatile days (e.g., 0.16 = 16% range)
             # Without treatment, this creates outliers that survive even RobustScaler normalization
             # Strategy: Winsorize at 99th percentile, then log1p transform
-            hl_range_raw = (df['high'] - df['low']) / (df['close'] + 1e-8)
+            hl_range_raw = (df['High'] - df['Low']) / (df['Close'] + 1e-8)
             hl_range_p99 = hl_range_raw.quantile(0.99)
             hl_range_winsorized = hl_range_raw.clip(upper=hl_range_p99)  # Cap at 99th percentile
             features['hl_range'] = np.log1p(hl_range_winsorized)  # Log transform for mild skew
             features['hl_range_ma'] = features['hl_range'].rolling(20).mean()
             
             # Open-close range
-            features['oc_range'] = (df['close'] - df['open']) / (df['open'] + 1e-8)
+            features['oc_range'] = (df['Close'] - df['Open']) / (df['Open'] + 1e-8)
             
             # Roll's implied spread estimator
             features['roll_spread'] = self._roll_spread(df)
@@ -203,7 +203,7 @@ class EnhancedFinancialFeatures:
             
             # Amihud illiquidity (20-day moving average)
             features['amihud_illiq'] = (
-                np.abs(returns) / (df['volume'] * df['close'] + 1e-8)
+                np.abs(returns) / (df['Volume'] * df['Close'] + 1e-8)
             ).rolling(20).mean()
             
             # Order flow imbalance proxy (using volume and price direction)
@@ -215,37 +215,37 @@ class EnhancedFinancialFeatures:
         if config['volume']:
             print("  → Volume-weighted features")
             # Volume rate of change
-            features['volume_roc'] = df['volume'].pct_change(5)
+            features['volume_roc'] = df['Volume'].pct_change(5)
             
             # Dollar volume (use ratio, not raw values)
-            dollar_volume = df['volume'] * df['close']
+            dollar_volume = df['Volume'] * df['Close']
             features['dollar_volume_ma_ratio'] = dollar_volume / (dollar_volume.rolling(20).mean() + 1e-8)
             
             # Volume metrics
-            features['volume_norm'] = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+            features['volume_norm'] = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
             features['volume_zscore'] = (
-                (df['volume'] - df['volume'].rolling(20).mean()) / 
-                (df['volume'].rolling(20).std() + 1e-8)
+                (df['Volume'] - df['Volume'].rolling(20).mean()) / 
+                (df['Volume'].rolling(20).std() + 1e-8)
             )
             
             # VWAP
             features['vwap_20'] = (
-                (df['close'] * df['volume']).rolling(20).sum() /
-                (df['volume'].rolling(20).sum() + 1e-8)
+                (df['Close'] * df['Volume']).rolling(20).sum() /
+                (df['Volume'].rolling(20).sum() + 1e-8)
             )
-            features['price_vwap_ratio'] = df['close'] / (features['vwap_20'] + 1e-8)
+            features['price_vwap_ratio'] = df['Close'] / (features['vwap_20'] + 1e-8)
             
             # On-Balance Volume (normalize by cumulative volume to make scale-invariant)
-            obv_raw = talib.OBV(df['close'], df['volume'])
-            cum_volume = df['volume'].cumsum()
+            obv_raw = talib.OBV(df['Close'], df['Volume'])
+            cum_volume = df['Volume'].cumsum()
             # OBV normalized by total volume traded (scale-invariant across stocks)
             features['obv_normalized'] = obv_raw / (cum_volume + 1e-8)
             # OBV rate of change (momentum) - use log returns to avoid explosion
             features['obv_roc'] = np.log(obv_raw / (obv_raw.shift(20) + 1e-8))
             
             # Accumulation/Distribution (normalize by cumulative volume for scale-invariance)
-            ad_raw = talib.AD(df['high'], df['low'], df['close'], df['volume'])
-            cum_volume = df['volume'].cumsum()
+            ad_raw = talib.AD(df['High'], df['Low'], df['Close'], df['Volume'])
+            cum_volume = df['Volume'].cumsum()
             # A/D normalized by total volume (scale-invariant)
             features['ad_normalized'] = ad_raw / (cum_volume + 1e-8)
             # A/D rate of change (momentum) - use log returns to avoid explosion
@@ -253,14 +253,14 @@ class EnhancedFinancialFeatures:
             
             # Chaikin Money Flow (CORRECT calculation, not ADOSC!)
             # CMF = sum(Money Flow Volume) / sum(Volume) over period
-            mfm = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (df['high'] - df['low'] + 1e-10)
-            mfv = mfm * df['volume']
-            features['cmf'] = mfv.rolling(20).sum() / (df['volume'].rolling(20).sum() + 1e-8)
+            mfm = ((df['Close'] - df['Low']) - (df['High'] - df['Close'])) / (df['High'] - df['Low'] + 1e-10)
+            mfv = mfm * df['Volume']
+            features['cmf'] = mfv.rolling(20).sum() / (df['Volume'].rolling(20).sum() + 1e-8)
             
             # Relative volume (with log1p transform to handle volume spikes)
             # Note: relative_volume can spike to 5x+ on high-volume days (news, earnings)
             # Log1p transform compresses these outliers while preserving relative ordering
-            rel_vol_raw = df['volume'] / (df['volume'].rolling(20).mean() + 1e-8)
+            rel_vol_raw = df['Volume'] / (df['Volume'].rolling(20).mean() + 1e-8)
             features['relative_volume'] = np.log1p(rel_vol_raw)  # Log transform to handle spikes
         
         # 5. MOMENTUM GROUP - Momentum and oscillator indicators
@@ -268,30 +268,30 @@ class EnhancedFinancialFeatures:
             print("  → Momentum & oscillators")
             # RSI at multiple periods
             for period in [7, 14, 21]:
-                features[f'rsi_{period}'] = talib.RSI(df['close'], period)
+                features[f'rsi_{period}'] = talib.RSI(df['Close'], period)
             
             # MACD
-            macd, signal_line, hist = talib.MACD(df['close'])
+            macd, signal_line, hist = talib.MACD(df['Close'])
             features['macd'] = macd
             features['macd_signal'] = signal_line
             features['macd_hist'] = hist
             features['macd_divergence'] = macd - signal_line
             
             # Stochastic oscillator
-            slowk, slowd = talib.STOCH(df['high'], df['low'], df['close'])
+            slowk, slowd = talib.STOCH(df['High'], df['Low'], df['Close'])
             features['stoch_k'] = slowk
             features['stoch_d'] = slowd
             features['stoch_k_d_diff'] = slowk - slowd
             
             # Williams %R
-            features['williams_r'] = talib.WILLR(df['high'], df['low'], df['close'])
+            features['williams_r'] = talib.WILLR(df['High'], df['Low'], df['Close'])
             
             # Average True Range (ATR)
-            features['atr'] = talib.ATR(df['high'], df['low'], df['close'])
-            features['atr_ratio'] = features['atr'] / df['close']
+            features['atr'] = talib.ATR(df['High'], df['Low'], df['Close'])
+            features['atr_ratio'] = features['atr'] / df['Close']
             
             # CCI (Commodity Channel Index)
-            features['cci'] = talib.CCI(df['high'], df['low'], df['close'])
+            features['cci'] = talib.CCI(df['High'], df['Low'], df['Close'])
             
             # Z-score of returns
             features['return_zscore_20'] = (
@@ -300,43 +300,43 @@ class EnhancedFinancialFeatures:
             )
             
             # ROC (Rate of Change)
-            features['roc_10'] = talib.ROC(df['close'], 10)
-            features['roc_20'] = talib.ROC(df['close'], 20)
+            features['roc_10'] = talib.ROC(df['Close'], 10)
+            features['roc_20'] = talib.ROC(df['Close'], 20)
         
         # 6. TREND GROUP - Trend strength and direction
         if config['trend']:
             print("  → Trend indicators")
             # ADX (trend strength) and components
-            features['adx'] = talib.ADX(df['high'], df['low'], df['close'])
-            features['adx_plus'] = talib.PLUS_DI(df['high'], df['low'], df['close'])
+            features['adx'] = talib.ADX(df['High'], df['Low'], df['Close'])
+            features['adx_plus'] = talib.PLUS_DI(df['High'], df['Low'], df['Close'])
             features['adx_minus'] = talib.MINUS_DI(
-                df['high'], df['low'], df['close']
+                df['High'], df['Low'], df['Close']
             )
             
             # Parabolic SAR
-            features['sar'] = talib.SAR(df['high'], df['low'])
-            features['sar_signal'] = (df['close'] > features['sar']).astype(int)
+            features['sar'] = talib.SAR(df['High'], df['Low'])
+            features['sar_signal'] = (df['Close'] > features['sar']).astype(int)
             
             # Aroon
-            aroon_down, aroon_up = talib.AROON(df['high'], df['low'])
+            aroon_down, aroon_up = talib.AROON(df['High'], df['Low'])
             features['aroon_up'] = aroon_up
             features['aroon_down'] = aroon_down
             features['aroon_oscillator'] = aroon_up - aroon_down
             
             # Distance from moving averages
-            for period in [10, 20]:
-                ma = df['close'].rolling(period).mean()
+            for period in [10, 20, 50, 200]:
+                ma = df['Close'].rolling(period).mean()
                 features[f'dist_from_ma{period}'] = (
-                    (df['close'] - ma) / (ma + 1e-8)
+                    (df['Close'] - ma) / (ma + 1e-8)
                 )
         
         # 7. BOLLINGER GROUP - Bollinger Bands
         if config['bollinger']:
             print("  → Bollinger Bands")
-            bb_upper, bb_middle, bb_lower = talib.BBANDS(df['close'], timeperiod=20)
+            bb_upper, bb_middle, bb_lower = talib.BBANDS(df['Close'], timeperiod=20)
             features['bb_upper'] = bb_upper
             features['bb_lower'] = bb_lower
-            features['bb_position'] = (df['close'] - bb_lower) / (bb_upper - bb_lower + 1e-8)
+            features['bb_position'] = (df['Close'] - bb_lower) / (bb_upper - bb_lower + 1e-8)
             features['bb_width'] = (bb_upper - bb_lower) / bb_middle
             features['bb_percent_b'] = features['bb_position']  # Same as bb_position
         
@@ -344,21 +344,21 @@ class EnhancedFinancialFeatures:
         if config['price_position']:
             print("  → Price position indicators")
             # Price position in range
-            features['price_position'] = (df['close'] - df['low']) / (df['high'] - df['low'] + 1e-8)
+            features['price_position'] = (df['Close'] - df['Low']) / (df['High'] - df['Low'] + 1e-8)
             
             # Distance from moving averages
             for period in [10, 20, 50, 200]:
-                ma = df['close'].rolling(period).mean()
+                ma = df['Close'].rolling(period).mean()
                 features[f'dist_from_ma{period}'] = (
-                    (df['close'] - ma) / (ma + 1e-8)
+                    (df['Close'] - ma) / (ma + 1e-8)
                 )
             
             # Distance from highs/lows
             features['dist_from_20d_high'] = (
-                df['close'] / df['high'].rolling(20).max() - 1
+                df['Close'] / df['High'].rolling(20).max() - 1
             )
             features['dist_from_20d_low'] = (
-                df['close'] / df['low'].rolling(20).min() - 1
+                df['Close'] / df['Low'].rolling(20).min() - 1
             )
             
             # Serial correlation (autocorrelation of returns)
@@ -396,7 +396,7 @@ class EnhancedFinancialFeatures:
             
             # Volume regime
             features['volume_percentile'] = (
-                df['volume'].rolling(252).rank(pct=True)
+                df['Volume'].rolling(252).rank(pct=True)
             )
             
             # Trend regime (requires trend features)
@@ -404,25 +404,28 @@ class EnhancedFinancialFeatures:
                 features['trend_percentile'] = features['adx'].rolling(252).rank(pct=True)
             
             # Relative Volatility Index
-            features['rvi'] = self._relative_volatility_index(df['close'], 14)
+            features['rvi'] = self._relative_volatility_index(df['Close'], 14)
             
             # Market state classification
             # Note: Enhanced classification using trend + volatility (not just vol binning)
             # More sophisticated than standard 3-regime volatility classification
             if config['volatility']:
                 features['market_state'] = self._classify_market_state(
-                    df['close'], features['volatility_yz_20']
+                    df['Close'], features['volatility_yz_20']
                 )
             
             # Fractal dimension (roughness of price path)
-            features['fractal_dimension'] = self._fractal_dimension(df['close'], 20)
+            features['fractal_dimension'] = self._fractal_dimension(df['Close'], 20)
         
         # 11. STATISTICAL GROUP - Statistical properties of returns
         if config['statistical']:
             print("  → Statistical properties (Skew, Kurtosis)")
-            # Autocorrelation
+            # Autocorrelation at multiple lags
             features['serial_corr_1'] = returns.rolling(20).apply(
                 lambda x: x.autocorr(1) if len(x) > 1 else 0
+            )
+            features['serial_corr_5'] = returns.rolling(20).apply(
+                lambda x: x.autocorr(5) if len(x) > 5 else 0
             )
             
             # Skewness & Kurtosis using professional log-return-based estimators
@@ -455,7 +458,7 @@ class EnhancedFinancialFeatures:
             # Risk-adjusted momentum (requires volatility)
             if config['volatility']:
                 features['risk_adj_momentum_20'] = (
-                    (df['close'] / df['close'].shift(20) - 1) /
+                    (df['Close'] / df['Close'].shift(20) - 1) /
                     (features['volatility_yz_20'] + 1e-8)
                 )
             
@@ -468,7 +471,7 @@ class EnhancedFinancialFeatures:
             )
             
             # Maximum drawdown
-            features['max_drawdown_20'] = self._max_drawdown(df['close'], 20)
+            features['max_drawdown_20'] = self._max_drawdown(df['Close'], 20)
             
             # Calmar ratio (return vs max drawdown)
             features['calmar_20'] = (
@@ -595,14 +598,14 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_ho = (df['high'] / df['open']).apply(np.log)
-        log_lo = (df['low'] / df['open']).apply(np.log)
-        log_co = (df['close'] / df['open']).apply(np.log)
+        log_ho = (df['High'] / df['Open']).apply(np.log)
+        log_lo = (df['Low'] / df['Open']).apply(np.log)
+        log_co = (df['Close'] / df['Open']).apply(np.log)
         
-        log_oc = (df['open'] / df['close'].shift(1)).apply(np.log)
+        log_oc = (df['Open'] / df['Close'].shift(1)).apply(np.log)
         log_oc_sq = log_oc**2
         
-        log_cc = (df['close'] / df['close'].shift(1)).apply(np.log)
+        log_cc = (df['Close'] / df['Close'].shift(1)).apply(np.log)
         log_cc_sq = log_cc**2
         
         rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
@@ -634,7 +637,7 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_hl = (df['high'] / df['low']).apply(np.log)
+        log_hl = (df['High'] / df['Low']).apply(np.log)
         rs = (1.0 / (4.0 * math.log(2.0))) * (log_hl**2.0)
         
         def f(v):
@@ -647,19 +650,34 @@ class EnhancedFinancialFeatures:
         
         return result
     
-    def _calculate_vpin(self, df: pd.DataFrame, volume_bucket_size: int = 50) -> pd.Series:
+    def _calculate_vpin(self, df: pd.DataFrame, n_buckets: int = 50) -> pd.Series:
         """
         Volume-Synchronized Probability of Informed Trading (VPIN)
         Easley et al. (2012)
+        
+        Fixed to use proper bucketing by total volume divided into n_buckets,
+        and handle zero price changes properly.
         """
         # Classify volume as buy or sell using tick rule
-        price_change = df['close'].diff()
-        buy_volume = df['volume'].where(price_change > 0, 0)
-        sell_volume = df['volume'].where(price_change < 0, 0)
+        price_change = df['Close'].diff()
         
-        # Create volume buckets
-        total_volume = buy_volume + sell_volume
-        bucket_id = (total_volume.cumsum() // volume_bucket_size).astype(int)
+        # Handle zero price changes: assign to buy if next change is positive
+        # This is the "tick test" - use direction of next non-zero change
+        buy_volume = df['Volume'].where(price_change > 0, 0)
+        sell_volume = df['Volume'].where(price_change < 0, 0)
+        
+        # For zero changes, split volume equally (conservative approach)
+        zero_change_mask = (price_change == 0) & (price_change.notna())
+        buy_volume = buy_volume.where(~zero_change_mask, df['Volume'] / 2)
+        sell_volume = sell_volume.where(~zero_change_mask, df['Volume'] / 2)
+        
+        # Calculate total volume and create buckets
+        total_volume = df['Volume'].sum()
+        volume_per_bucket = total_volume / n_buckets
+        
+        # Assign each bar to a bucket based on cumulative volume
+        cum_volume = df['Volume'].cumsum()
+        bucket_id = (cum_volume / volume_per_bucket).astype(int)
         
         # Calculate order imbalance for each bucket
         vpin = pd.Series(index=df.index, dtype=float)
@@ -671,6 +689,8 @@ class EnhancedFinancialFeatures:
                 total_vol = buy_vol + sell_vol
                 if total_vol > 0:
                     vpin[mask] = abs(buy_vol - sell_vol) / total_vol
+                else:
+                    vpin[mask] = 0.0
                     
         return vpin.rolling(20).mean()
     
@@ -679,8 +699,8 @@ class EnhancedFinancialFeatures:
         Kyle's Lambda - price impact coefficient
         Measures information asymmetry
         """
-        returns = df['close'].pct_change()
-        signed_volume = df['volume'] * np.sign(returns)
+        returns = df['Close'].pct_change()
+        signed_volume = df['Volume'] * np.sign(returns)
         
         lambda_values = pd.Series(index=df.index, dtype=float)
         
@@ -703,7 +723,7 @@ class EnhancedFinancialFeatures:
         Roll's implied spread estimator
         Based on serial covariance of price changes
         """
-        returns = df['close'].pct_change()
+        returns = df['Close'].pct_change()
         
         spread = returns.rolling(window).apply(
             lambda x: 2 * np.sqrt(-np.cov(x[:-1], x[1:])[0, 1]) 
@@ -712,37 +732,26 @@ class EnhancedFinancialFeatures:
         
         return spread
     
-    def _corwin_schultz_spread(self, df: pd.DataFrame, window: int = 2) -> pd.Series:
+    def _corwin_schultz_spread(self, df: pd.DataFrame) -> pd.Series:
         """
-        Corwin-Schultz bid-ask spread estimator
+        Corwin-Schultz bid-ask spread estimator (Simplified)
         Uses high-low prices over 2 days
+        
+        Reference: Corwin and Schultz (2012) "A Simple Way to Estimate
+        Bid-Ask Spreads from Daily High and Low Prices"
+        
+        Note: This is a simplified version. The full implementation requires
+        extensive overnight return adjustments and data cleaning that are
+        dataset-specific. For equity data without these adjustments, we use
+        roll_spread as the primary spread estimator instead.
+        
+        Fallback: Returns hl_range / 2 as a simple spread proxy.
         """
-        high = df['high']
-        low = df['low']
-        
-        # 2-day high-low
-        h2 = high.rolling(2).max()
-        l2 = low.rolling(2).min()
-        
-        # Daily high-low ratio (beta)
-        beta = (np.log(high / low)) ** 2
-        
-        # Compute gamma
-        gamma = (np.log(h2 / l2)) ** 2
-        
-        # Compute alpha (the spread component)
-        # Avoid taking sqrt of negative numbers
-        term1 = (np.sqrt(2 * beta) - np.sqrt(beta))
-        term2 = np.sqrt(gamma)
-        
-        k = 3 - 2 * np.sqrt(2)
-        alpha = (term1 - term2) / k
-        
-        # Convert to spread estimate (bounded between 0 and 1)
-        spread = 2 * (np.exp(alpha) - 1) / (1 + np.exp(alpha))
-        
-        # Clip to valid range and replace invalid values
-        spread = spread.clip(lower=0, upper=1)
+        # Simple proxy: High-Low range divided by 2
+        # This is a reasonable approximation of the bid-ask bounce
+        # and correlates with true spreads
+        hl_range = (df['High'] - df['Low']) / df['Close']
+        spread = (hl_range / 2).clip(lower=0, upper=0.1)
         
         return spread
     
@@ -756,11 +765,11 @@ class EnhancedFinancialFeatures:
         Standard version uses buy ratio: buy / (buy + sell) which ranges [0, 1]
         Symmetric version is more intuitive for ML features (centered at zero)
         """
-        returns = df['close'].pct_change()
+        returns = df['Close'].pct_change()
         
         # Classify volume using tick rule
-        buy_volume = df['volume'] * (returns > 0).astype(float)
-        sell_volume = df['volume'] * (returns < 0).astype(float)
+        buy_volume = df['Volume'] * (returns > 0).astype(float)
+        sell_volume = df['Volume'] * (returns < 0).astype(float)
         
         # Calculate imbalance (symmetric: -1 to +1)
         imbalance = (buy_volume - sell_volume).rolling(window).sum() / \
@@ -769,20 +778,33 @@ class EnhancedFinancialFeatures:
         return imbalance
     
     def _shannon_entropy(self, returns: pd.Series) -> float:
-        """Calculate Shannon entropy of returns"""
+        """
+        Calculate Shannon entropy of returns distribution
+        Uses histogram binning (equal-width) instead of quantile binning
+        to capture actual distribution variation
+        """
         if len(returns) < 2:
             return 0
             
-        # Discretize returns into bins
-        bins = pd.qcut(returns, q=5, labels=False, duplicates='drop')
+        # Use histogram binning with equal-width bins
+        # Number of bins using Sturges' rule: k = 1 + log2(n)
+        n_bins = max(3, int(np.ceil(1 + np.log2(len(returns)))))
         
-        # Calculate probabilities
-        probs = bins.value_counts(normalize=True)
-        
-        # Shannon entropy
-        entropy = -np.sum(probs * np.log2(probs + 1e-10))
-        
-        return entropy
+        try:
+            # Create histogram with equal-width bins
+            counts, _ = np.histogram(returns, bins=n_bins)
+            
+            # Filter out empty bins and calculate probabilities
+            counts = counts[counts > 0]
+            probs = counts / counts.sum()
+            
+            # Shannon entropy: H = -sum(p * log2(p))
+            entropy = -np.sum(probs * np.log2(probs))
+            
+            return entropy
+        except Exception:
+            # Fallback for edge cases (e.g., all values identical)
+            return 0.0
     
     def _lempel_ziv_complexity(self, returns: pd.Series) -> float:
         """
@@ -933,12 +955,12 @@ class EnhancedFinancialFeatures:
         Hui-Heubel liquidity ratio
         Lower values = more liquid
         """
-        high = df['high'].rolling(window).max()
-        low = df['low'].rolling(window).min()
-        volume = df['volume'].rolling(window).sum()
+        high = df['High'].rolling(window).max()
+        low = df['Low'].rolling(window).min()
+        volume = df['Volume'].rolling(window).sum()
         
         price_range = (high - low) / low
-        turnover = volume / df['volume'].rolling(20).mean()
+        turnover = volume / df['Volume'].rolling(20).mean()
         
         return price_range / (turnover + 1e-8)
     
@@ -949,8 +971,8 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_hl = (df['high'] / df['low']).apply(np.log)
-        log_co = (df['close'] / df['open']).apply(np.log)
+        log_hl = (df['High'] / df['Low']).apply(np.log)
+        log_co = (df['Close'] / df['Open']).apply(np.log)
         
         rs = 0.5 * log_hl**2 - (2*math.log(2)-1) * log_co**2
         
@@ -969,7 +991,7 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_return = (df['close'] / df['close'].shift(1)).apply(np.log)
+        log_return = (df['Close'] / df['Close'].shift(1)).apply(np.log)
         
         def f(v):
             return (trading_periods * v.var())**0.5
@@ -988,9 +1010,9 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_ho = (df['high'] / df['open']).apply(np.log)
-        log_lo = (df['low'] / df['open']).apply(np.log)
-        log_co = (df['close'] / df['open']).apply(np.log)
+        log_ho = (df['High'] / df['Open']).apply(np.log)
+        log_lo = (df['Low'] / df['Open']).apply(np.log)
+        log_co = (df['Close'] / df['Open']).apply(np.log)
         
         rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
 
@@ -1011,7 +1033,7 @@ class EnhancedFinancialFeatures:
         """
         import math
         
-        log_return = (df['close'] / df['close'].shift(1)).apply(np.log)
+        log_return = (df['Close'] / df['Close'].shift(1)).apply(np.log)
 
         vol = log_return.rolling(window=window, center=False).std() * math.sqrt(trading_periods)
 
@@ -1033,7 +1055,7 @@ class EnhancedFinancialFeatures:
         Negative skew: left tail (more downside risk)
         Positive skew: right tail (more upside potential)
         """
-        log_return = (df['close'] / df['close'].shift(1)).apply(np.log)
+        log_return = (df['Close'] / df['Close'].shift(1)).apply(np.log)
         
         result = log_return.rolling(window=window, center=False).skew()
         
@@ -1049,7 +1071,7 @@ class EnhancedFinancialFeatures:
         Low kurtosis: thin tails (fewer extreme events)
         Normal distribution has kurtosis = 3
         """
-        log_return = (df['close'] / df['close'].shift(1)).apply(np.log)
+        log_return = (df['Close'] / df['Close'].shift(1)).apply(np.log)
         
         result = log_return.rolling(window=window, center=False).kurt()
         
@@ -1153,7 +1175,7 @@ class EnhancedFinancialFeatures:
             - dynamic_sl: SL threshold used
         """
         # Calculate realized volatility
-        volatility = df['close'].pct_change().rolling(20, min_periods=10).std()
+        volatility = df['Close'].pct_change().rolling(20, min_periods=10).std()
         
         # Fill initial NaN values in volatility with forward fill then median
         volatility = volatility.fillna(method='bfill')
@@ -1190,8 +1212,8 @@ class EnhancedFinancialFeatures:
         exit_days = []
         
         for i in range(len(df) - horizon):
-            future_returns = df['close'].pct_change().iloc[i+1:i+1+horizon].cumsum()
-            entry_price = df['close'].iloc[i]
+            future_returns = df['Close'].pct_change().iloc[i+1:i+1+horizon].cumsum()
+            entry_price = df['Close'].iloc[i]
             
             tp_threshold = dynamic_tp.iloc[i]
             sl_threshold = dynamic_sl.iloc[i]
@@ -1209,7 +1231,7 @@ class EnhancedFinancialFeatures:
                 exit_days.append(exit_day_offset)
                 
                 # Calculate actual return at TP touch (mlfinlab method)
-                exit_price = df['close'].loc[tp_hit]
+                exit_price = df['Close'].loc[tp_hit]
                 exit_returns.append((exit_price / entry_price) - 1)
                 
             elif sl_hit is not None:
@@ -1221,7 +1243,7 @@ class EnhancedFinancialFeatures:
                 exit_days.append(exit_day_offset)
                 
                 # Calculate actual return at SL touch
-                exit_price = df['close'].loc[sl_hit]
+                exit_price = df['Close'].loc[sl_hit]
                 exit_returns.append((exit_price / entry_price) - 1)
                 
             else:
@@ -1231,13 +1253,13 @@ class EnhancedFinancialFeatures:
                 if timeout_idx < len(df):
                     exit_timestamps.append(df.index[timeout_idx])
                     exit_days.append(horizon)
-                    exit_price = df['close'].iloc[timeout_idx]
+                    exit_price = df['Close'].iloc[timeout_idx]
                     exit_returns.append((exit_price / entry_price) - 1)
                 else:
                     # Edge case: not enough data for full horizon
                     exit_timestamps.append(df.index[-1])
                     exit_days.append(len(df) - i - 1)
-                    exit_price = df['close'].iloc[-1]
+                    exit_price = df['Close'].iloc[-1]
                     exit_returns.append((exit_price / entry_price) - 1)
         
         # Pad the end with NaN (no valid trades in last horizon days)
